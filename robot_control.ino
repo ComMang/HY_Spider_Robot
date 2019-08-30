@@ -3,15 +3,15 @@
 /* Library */
 #include <Servo.h>
 #include <SoftwareSerial.h>
-#include <FreeRTOS_AVR.h> // install FreeRTOS library
+#include <stdlib.h>
 
 /* Define, Macro */
-// Bluetooth module receive, transmit pin
-#define BTRXD 8
-#define BTTXD 7
+// Bluetooth module receive, transmit pin using Serial3
+//#define BTRXD 15
+//#define BTTXD 14
 
-// Angel delay : 1 degree per 25ms
-#define DELAY 25
+// Angel delay : 1 degree per 20ms
+#define DELAY 20
 
 // Angle No
 #define END 0 // 3rd angle
@@ -23,6 +23,10 @@
 #define NE 1
 #define SE 2
 #define SW 3
+
+// Send
+#define START 1
+#define STOP 2
 
 // Command
 #define STEADY 0
@@ -41,16 +45,17 @@
 #define SERVO_ERROR -999
 
 // Steady Angle
-#define STEADY_END 180
-#define STEADY_MID 110
+#define STEADY_END 0
+#define STEADY_MID 120
 #define STEADY_FIR 90
 
 // Initial Angle
-#define INITIAL_END 90
-#define INITIAL_MID 180
+#define INITIAL_END 0
+#define INITIAL_MID 90
 #define INITIAL_FIR 90
 
 // PWM Pin
+//#define getPin(legNo, angleNo) (legNo*3 + angleNo + 2)
 inline int getPin(int legNo, int angleNo){ return legNo*3 + angleNo + 2; }
 
 /* Struct */
@@ -59,15 +64,15 @@ typedef struct Command {
  int pin;
  int angle;
  int mode;
- struct Command *prev;
- struct Command *next; 
+ struct Command *prev = NULL;
+ struct Command *next = NULL; 
 }Command;
 
 // Command list struct
 typedef struct CommandList {
   int listCount;
-  struct Command *head;
-  struct Command *tail;
+  struct Command *head = NULL;
+  struct Command *tail = NULL;
 }CommandList;
 
 // Servo struct
@@ -75,17 +80,6 @@ typedef struct ServoList {
   int angle;
   Servo hServo;
 }ServoList;
-
-/* Global Variable */
-//SoftwareSerial bluetooth(BT_RXD, BT_TXD); // set bluetooth communication serial
-
-ServoList Motor[12]; // Servo handle
-CommandList *list = new CommandList; // command list
-int command = STEADY; // received command from bluetooth communication
-bool error = false; // if not finished, goto STEADY state
-bool isfinish = false; // thread finish
-
-SemaphoreHandle_t hSem = NULL; // semaphore handle
 
 /* Function */
 // Servo Control function
@@ -97,167 +91,49 @@ int changediffServo(ServoList *target, int changediffAngle); // change Serovo an
 int* isSteadyState(ServoList *motor); // check servo is steady state, return null(all steady) or pin list(not steady Servo)
 
 // Command and Command list function
-void initCommand(CommandList *list); // init command list sturct
+void initCommand(CommandList *_list); // init command list sturct
 void deleteCommand(Command *lastCommand); // delete command linked list (backward)
-void AddCommand(CommandList *list, int legNo, int angleNo, int mode, int angle); // add command to command list
-void deleteCommandList(CommandList *list); // delete command list sturct
-bool DoCommand(CommandList *list, ServoList *motor); // do command in command list (head to tail; FIFO)
-bool DoCommand(Command *error_command, ServoList *motor, int nCommand); // do restore command in command list(tail to head)
+void AddCommand(CommandList *_list, int legNo, int angleNo, int mode, int angle); // add command to command list
+void deleteCommandList(CommandList *_list); // delete command list sturct
+bool DoCommand(CommandList *_list, ServoList *motor); // do command in command list (head to tail; FIFO)
+bool DoFixPos(Command *error_command, ServoList *motor, int nCommand); // do restore command in command list(tail to head)
 
 // Phase function
-void endServo(); // End phase(retrun servo to initial state)
+void endServo(ServoList *motor, CommandList *_list); // End phase(retrun servo to initial state)
 
 // Thread function
-static void runServo(void* arg);
-static void mainLoop(void* arg);
+void runServo(void* arg);
+void mainLoop(void* arg);
 
-/* Thread */
-static void mainLoop(void* arg) { // main loop
-  while(1) {
-    /*
-    if(bluetooh.available()) { // if received command is avilable by bluetooth
-      
-      // Todo : bluetooth module(filltered), output : command 
-      
-      // Todo : if no error in previous or bluetooth data is available
-      
-    }
+/* Global Variable */
+ServoList Motor[12]; // Servo handle
+CommandList *list = new CommandList; // command list
 
-    if(!isfinish) { // if runServo is not finished
-      
-      // Todo : Save received command or ignore received command
-      
-    }
-    else if(isSteadyState(Motor) != NULL && command == STEADY){ // if runServo is finished and not steady state
-      
-      // Todo : return steady state in any condition
-      
-      xSemaphoreGive(hSem); // give Semphore to runServo
-    }
-    else { // if runServo is finished and steady state
-      switch(command) // set command list
-      {
-        case FORWARD:
-        // Todo : add foward command in command list
-        break;
-      
-        case BACKWARD:
-        // Todo : add backward command in command list
-        break;
-      
-        case R_ROT:
-        // Todo : add right rotation command in command list
-        break;
-      
-        case L_ROT:
-        // Todo : add left rotation command in command list
-        break;
-    
-        case END:
-        endServo();
-        break;
-      }
-      
-      xSemaphoreGive(hSem); // give Semphore to runServo
-    }
-    
-    vTaskDelay((100L * configTICK_RATE_HZ) / 1000L); // delay 100ms
-    */
-
-    // test code
-    int angle, data;
-    if(Serial.available() && isfinish) {
-      Serial.println("Servo start.");
-      
-      data = Serial.parseInt();
-      Serial.println(data);
-      angle = data % 100;
-    
-      switch((int)(data/100)) {
-        case 1:
-        AddCommand(list, SE, FIRST, CHANGEDIFF, angle/2);
-        AddCommand(list, SE, FIRST, CHANGEDIFF, angle/2);
-        break;
-        
-        case 2:
-        AddCommand(list, SE, FIRST, CHANGEDIFF, -angle);
-        break;
-        
-        case 3:
-        AddCommand(list, SE, MID, CHANGEDIFF, angle/2);
-        AddCommand(list, SE, MID, CHANGEDIFF, angle/2);
-        break;
-        
-        case 4:
-        AddCommand(list, SE, MID, CHANGEDIFF, -angle/2);
-        AddCommand(list, SE, MID, CHANGEDIFF, -angle/2);
-        break;
-        
-        case 5:
-        AddCommand(list, SE, END, CHANGEDIFF, angle/4);
-        AddCommand(list, SE, END, CHANGEDIFF, angle/4);
-        AddCommand(list, SE, END, CHANGEDIFF, angle/4);
-        AddCommand(list, SE, END, CHANGEDIFF, angle/4);
-        break;
-        
-        case 6:
-        AddCommand(list, SE, END, CHANGEDIFF, -angle);
-        break;
-        
-        case 7:
-        AddCommand(list, SE, FIRST, CHANGEINTO, angle);
-        break;
-        
-        case 8:
-        AddCommand(list, SE, MID, CHANGEINTO, angle);
-        break;
-        
-        case 9:
-        AddCommand(list, SE, END, CHANGEINTO, angle);
-        break;
-        
-        default:
-        Serial.println("Out of range.");
-        break;
-      }
-      xSemaphoreGive(hSem); // give Semphore to runServo
-    } 
-    vTaskDelay((100L * configTICK_RATE_HZ) / 1000L); // delay 100ms
-  }
-}
-
-static void runServo(void* arg) { // run Servo with command list
-  while(1) {
-    xSemaphoreTake(hSem, portMAX_DELAY); // wait until taking Samaphore from mainLoop, parameter : semphore handle, delay 
-
-    isfinish = false; // not finished
-    
-    if(!DoCommand(list, Motor)) // run Servo with command list
-      Serial.println("Cannot finish command.");
-    else
-      Serial.println("Finish Servo.");
-    
-    command = STEADY; // reset command
-    isfinish = true; // finished
-  }
-}
+int command = STEADY; // received command from bluetooth communication
+bool error = false; // if not finished, goto STEADY state
 
 /* Arduino Init */
 void setup() {
   // set Serial communication bitrate
   Serial.begin(9600);
-
-  // set bluetooth communication bitrate
-//  bluetooth.begin(9600);
-
+  Serial.println("Start.");
+  
   // init servo(attach Servo to PWM pin)
   for(int i = 0; i < 12 ; i++) {
       Motor[i].angle = 0;
       Motor[i].hServo.attach(i + 2);
+      
+      if(!Motor[i].hServo.attached()) {
+        Serial.print(i+2);
+        Serial.println(" pin is not attached.");
+        while(1);
+      }
   }
+  Serial.println("Servo attached.");
 
   // init servo angle
   for(int legNo = 0 ; legNo < 4 ; legNo++) {
+    /*
     // set initial angle
     Motor[getPin(legNo, END)-2].angle = INITIAL_END;
     Motor[getPin(legNo, MID)-2].angle = INITIAL_MID;
@@ -267,64 +143,191 @@ void setup() {
     changeintoServo(&Motor[getPin(legNo, END)-2], STEADY_END);
     changeintoServo(&Motor[getPin(legNo, MID)-2], STEADY_MID);
     changeintoServo(&Motor[getPin(legNo, FIRST)-2], STEADY_FIR);
-  
+    */
+    
     // adjust Servo angle  
     setServo(&Motor[getPin(legNo, END)-2], STEADY_END); 
     setServo(&Motor[getPin(legNo, MID)-2], STEADY_MID); 
     setServo(&Motor[getPin(legNo, FIRST)-2], STEADY_FIR); 
-  }
-  
-  // init Semaphore
-  hSem = xSemaphoreCreateCounting(1,0); // parameter : max thread num, initial thread num
-
-  // create thread(main Loop, run Servo)
-  portBASE_TYPE Thread1, Thread2;
-  
-  Thread1 = xTaskCreate(mainLoop, NULL, configMINIMAL_STACK_SIZE, NULL, 1, NULL); // parameter : callback func, name, stack depth, parameter, priority(low : 1), handle of create task 
-  Thread2 = xTaskCreate(runServo, NULL, configMINIMAL_STACK_SIZE, NULL, 2, NULL);
-
-  // check error during semaphore or thread creation
-  if(hSem == NULL || Thread1 != pdPASS || Thread2 != pdPASS) {
-    Serial.println("Creation prob.");
     
-    while(1);
+    Serial.print("Set Servo angle...");
+    Serial.println(legNo);
   }
+  // set Bluetooth communication bitrate
+  Serial3.begin(9600);
+  Serial3.println(START);
   
+  Serial.println("Init Servo.");
+
+  // init command list
+  initCommand(list);
+  Serial.println("Init Commandlist.");
+  
+  // ready to move
   Serial.println("Ready.");
-
-  // start Scheduler
-  vTaskStartScheduler();
-
-  // if error during task
-  Serial.println("Insufficient RAM");
-  while(1);
 }
 
 void loop() {
-  // not use 
+  // receive BT
+  char btBuffer[255] = {0,};
+  int btByte = 0;
+  
+  if(Serial3.available()) {
+    Serial.print("BT> ");
+    
+    do { // receive byte in bluetooth
+    btBuffer[btByte] = Serial3.read();
+    Serial.print((int)btBuffer[btByte]);
+    Serial.print(" ");
+    }while(btBuffer[btByte++] != -1);
+    Serial.println();
+
+    do { // choose last received byte (except CR LT -1)
+      if(btBuffer[btByte] >= 48 && btBuffer[btByte] <= 57) {
+        command = (int)btBuffer[btByte] - 48; 
+        break;
+      }
+      btByte -= 1;
+    }while(btByte >= 0);
+ 
+    if(command != STEADY){ // if runServo is finished and steady state
+      Serial.print("Get> ");
+      Serial.println(command);
+      
+      Serial3.println(STOP); // Stop transmit joystick result
+      
+      switch(command) // set command list
+      {
+        case FORWARD:
+        // Todo : add foward command in command list
+        
+        // Test code
+        AddCommand(list, SE, FIRST, CHANGEDIFF, 10);
+        AddCommand(list, SE, FIRST, CHANGEDIFF, -10);
+        break;
+      
+        case BACKWARD:
+        // Todo : add backward command in command list
+        
+        // Test code
+        AddCommand(list, SE, MID, CHANGEDIFF, 10);
+        AddCommand(list, SE, MID, CHANGEDIFF, -10);
+        break;
+      
+        case R_ROT:
+        // Todo : add right rotation command in command list
+        
+        // Test code
+        AddCommand(list, SE, END, CHANGEDIFF, 10);
+        AddCommand(list, SE, END, CHANGEDIFF, -10);
+        break;
+      
+        case L_ROT:
+        // Todo : add left rotation command in command list
+        
+        // Test code
+        AddCommand(list, SE, FIRST, CHANGEINTO, 90);
+        AddCommand(list, SE, MID, CHANGEINTO, 90);
+        AddCommand(list, SE, END, CHANGEINTO, 90);
+        break;
+    
+        case END:
+        endServo(Motor, list);
+        break;
+  
+        default:
+        Serial.println("Error in bluetooth communication.");
+        endServo(Motor, list);
+        break;
+      }
+      Serial.println("Run Servo.");
+      
+      if(!DoCommand(list, Motor)) // run Servo with command list
+        Serial.println("Cannot finish command.");
+      else
+        Serial.println("Finish Servo.");
+        
+      deleteCommandList(list);
+      
+      Serial3.println(START); // Start transmit joystick result
+    }
+    else { // if steady state
+      Serial.print("Cmd > ");
+      Serial.println(command);
+      
+      int *arrPin = isSteadyState(Motor), index = 0;
+      if(arrPin != NULL) {
+        while(arrPin[index] != 0) {
+          switch(arrPin[index++]) {
+            case 2:
+            AddCommand(list, NW, END, CHANGEINTO, STEADY_END);
+            break;
+            case 3:
+            AddCommand(list, NE, END, CHANGEINTO, STEADY_END); 
+            break;
+            case 4:
+            AddCommand(list, SE, END, CHANGEINTO, STEADY_END);
+            break;
+            case 5:
+            AddCommand(list, SW, END, CHANGEINTO, STEADY_END);
+            break;
+            
+            case 6:
+            AddCommand(list, NW, MID, CHANGEINTO, STEADY_MID);
+            break;
+            case 7:
+            AddCommand(list, NE, MID, CHANGEINTO, STEADY_MID); 
+            break;
+            case 8:
+            AddCommand(list, SE, MID, CHANGEINTO, STEADY_MID);
+            break;
+            case 9:
+            AddCommand(list, SW, MID, CHANGEINTO, STEADY_MID);
+            break;
+
+            case 10:
+            AddCommand(list, NW, FIRST, CHANGEINTO, STEADY_FIR);
+            break;
+            case 11:
+            AddCommand(list, NE, FIRST, CHANGEINTO, STEADY_FIR); 
+            break;
+            case 12:
+            AddCommand(list, SE, FIRST, CHANGEINTO, STEADY_FIR);
+            break;
+            case 13:
+            AddCommand(list, SW, FIRST, CHANGEINTO, STEADY_FIR);
+            break;
+          }
+        
+          if(!DoCommand(list, Motor)) // run Servo with command list
+            Serial.println("Cannot finish command.");
+          else
+            Serial.println("Adjust Servo in steady state.");
+            
+          deleteCommandList(list);
+        }
+      }
+    }
+  }
+  delay(100); // delay 100ms
 }
 
 /* Phase Function */
-void endServo() {
-  Serial.println("Please hold robot.");
-        
-  vTaskDelay((1000L * configTICK_RATE_HZ) / 1000L); // delay 1000ms
-
-  for(int legNo = 0 ; legNo < 4 ; legNo++) { // change Servo angle to initial state
-    changeintoServo(&Motor[getPin(legNo, END)-2], INITIAL_END);
-    changeintoServo(&Motor[getPin(legNo, MID)-2], INITIAL_MID);
-    changeintoServo(&Motor[getPin(legNo, FIRST)-2], INITIAL_FIR);
-  }
+void endServo(ServoList *motor, CommandList *_list) {
+  // Stop transmit joystick result
+  Serial3.println(STOP);
+  Serial3.end();
   
-  Serial.println("Can remove VCC, GND wire from Power Supply.");
+  Serial.println("Please hold robot.");
+  Serial.println("Can remove VCC, GND wire from Power Supply."); 
 
-  deleteCommandList(list);
-  delete(list);
+  deleteCommandList(_list);
+  delete(_list);
   
   while(1);
 }
 
-/* Servo Function */
+/* Servo Control Function */
 // init Servo to specific angle
 bool setServo(ServoList *target, int setAngle){
   if(target->hServo.attached()){
@@ -347,21 +350,13 @@ int changeintoServo(ServoList *target, int changeintoAngle) {
     if(changeintoAngle > prevAngle) {
       for(; target->angle <= changeintoAngle ; target->angle++) { // increase angle with delay
         target->hServo.write(target->angle);
-        
-        if(hSem == NULL) // 1 degree / DELAY
-          delay(DELAY);
-        else
-          vTaskDelay((DELAY * configTICK_RATE_HZ) / 1000L); 
+        delay(DELAY);// 1 degree / DELAY
       }
     }
     else {
       for(; target->angle >= changeintoAngle ; target->angle--) { // decrease angle with delay
         target->hServo.write(target->angle);
-        
-        if(hSem == NULL) // 1 degree / DELAY
-          delay(DELAY);
-        else
-          vTaskDelay((DELAY * configTICK_RATE_HZ) / 1000L); 
+        delay(DELAY); // 1 degree / DELAY
       }
     }
     return changeintoAngle - prevAngle;
@@ -380,7 +375,7 @@ int changediffServo(ServoList *target, int changediffAngle) {
     for(int angle = 0; angle < changediffAngle ; angle++) { // change with delay
       target->angle++;
       target->hServo.write(target->angle);
-      vTaskDelay((DELAY * configTICK_RATE_HZ) / 1000L); // 1 degree / DELAY
+      delay(DELAY); // 1 degree / DELAY
     }
     return changediffAngle;
   }
@@ -389,7 +384,7 @@ int changediffServo(ServoList *target, int changediffAngle) {
   }
 }
 
-/* State Function */
+/* Servo State Function */
 int* isSteadyState(ServoList *motor) {
   int pinList[12] = {0,}, index = 0;
   for(int legNo = 0 ; legNo < 4 ; legNo++) {
@@ -413,66 +408,58 @@ int* isSteadyState(ServoList *motor) {
 
 /* Command Function */
 // init command list sturct
-void initCommand(CommandList *list) { 
-  list->listCount = 0;
-  list->head = NULL;
+void initCommand(CommandList *_list) { 
+  _list->listCount = 0;
+  _list->head = NULL;
 }
 
 // delete command list sturct
-void deleteCommandList(CommandList *list) {
-  deleteCommand(list->tail);
-  
-  list->head = NULL;
-  list->tail = NULL;
-  list->listCount = 0;
+void deleteCommandList(CommandList *_list) {
+  deleteCommand(_list->tail);
+  initCommand(_list);
 }
 
 // delete command linked list (backward)
 void deleteCommand(Command *lastCommand) {
   Command *target = lastCommand;
-  while(1){
-    target = target -> prev;
-    delete(target->next);
-    
-    target->next = NULL;
-    
-    if(target->prev == NULL) break;
+  while(target->prev == NULL){
+    delete(target);
+    target = target->prev;
   }
+  delete(lastCommand);
 }
 
 // add command to command list
-void AddCommand(CommandList *list, int legNo, int angleNo, int mode, int angle) {
-  Command *target = new Command;
+void AddCommand(CommandList *_list, int legNo, int angleNo, int mode, int angle) {
+  Serial.println("add command.");
   
+  Command *target = new Command;
   target->pin = getPin(legNo, angleNo); // target pin
   target->mode = mode; // target mode : set angle, change into specipic angle, change with difference
   target->angle = angle; // target angle after moving or delta angle
-  target->next = NULL;
   
   if(list->listCount == 0){ // if no command in command list
-    list->head = target;
-    list->tail = target;
-    
-    target->prev = NULL;
+    _list->head = target;
+    _list->tail = target;
   }
   else { // if command exist in command list
-    Command *temp = list->tail;
+    Command *temp = _list->tail;
     
-    list->tail->next = target;
-    list->tail = target;
+    temp->next = target;
     target->prev = temp;
+    _list->tail = target;
   }
   
-  list->listCount++;
+  _list->listCount++;
 }
 
 // do command in command list (head to tail; FIFO)
 // comment part is recovery part(if error occur during executing, do command backward)
-bool DoCommand(CommandList *list, ServoList *motor) {
+bool DoCommand(CommandList *_list, ServoList *motor) {
   int result, count = 0;
-  Command *target = list->head;
+  Command *target = _list->head;
   
-  while(1){
+  while(target != NULL){
     switch(target->mode) {
       case SET: // change Servo angle to specific angle
         result = setServo(&motor[target->pin - 2], target->angle);
@@ -490,36 +477,36 @@ bool DoCommand(CommandList *list, ServoList *motor) {
       break;
     }
 
-    if(result != SERVO_ERROR)
+    if(result != SERVO_ERROR) {
+      Serial.println("complete command.");
       count++;
-    else
+    }
+    else {
+      Serial.println("Error during command.");
       break;
+    }
     
-    if(target->next == NULL) // if last command
-      break;
-    else // if not, go next command
-      target = target->next;
+    target = target->next;
   }
   
-  if(count == list->listCount) { // if command is done
-    deleteCommandList(list);
+  if(count>=_list->listCount) { // if command is done
+    Serial.println("command done.");
     return true;
   }
   else { // if not
-    if(!DoCommand(target, motor, count)) {
+    if(!DoFixPos(target, motor, count)) {
       Serial.println("Error occur during restore state.");
-      deleteCommandList(list);
-      endServo();
+      endServo(motor, _list);
     }
     return false;
   }
 }
 
-bool DoCommand(Command *error_command, ServoList *motor, int nCommand) {
+bool DoFixPos(Command *error_command, ServoList *motor, int nCommand) {
   int result, count = 0;
   Command *target = error_command;
-  
-  while(1){
+
+  while(target != NULL){
     switch(target->mode) {
       case SET: // change Servo angle to specific angle
         result = setServo(&motor[target->pin - 2], target->angle);
@@ -534,19 +521,22 @@ bool DoCommand(Command *error_command, ServoList *motor, int nCommand) {
       break;
     }
 
-    if(result != SERVO_ERROR)
+    if(result != SERVO_ERROR) {
+      Serial.println("complete during fixing Pos.");
       count++;
-    else
+    }
+    else {
+      Serial.println("Error during fixing Pos.");
       break;
+    }
     
-    if(target->prev == NULL) // if last command
-      break;
-    else // if not, go next command
-      target = target->prev;
+    target = target->prev;
   }
   
-  if(count == nCommand)// if command is done
+  if(count >= nCommand) {// if command is done
+    Serial.println("fixing Pos done.");
     return true;
+  }
   else // if not
     return false;
 }
