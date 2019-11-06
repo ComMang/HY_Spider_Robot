@@ -47,13 +47,13 @@
 
 // Steady Angle
 #define STEADY_END 0
-#define STEADY_MID 120
+#define STEADY_MID 90
 #define STEADY_FIR 90
 
 // Initial Angle
-#define INITIAL_END 0
-#define INITIAL_MID 90
-#define INITIAL_FIR 90
+//#define INITIAL_END 0
+//#define INITIAL_MID 180
+//#define INITIAL_FIR 90
 
 // PWM Pin
 #define getPin(legNo, angleNo) (legNo * 3 + angleNo + 2)
@@ -67,6 +67,7 @@ typedef struct Command {
   int pin = 0;
   int angle = 0;
   int mode = 0;
+  bool useTimer = false;
   struct Command *prev = NULL;
   struct Command *next = NULL;
 } Command;
@@ -197,37 +198,133 @@ void loop() {
           Serial.println("FORWARD.");
           // Todo : add foward command in command list
 
-          // Test code
-          AddCommand(list, SE, FIRST, CHANGEDIFF, 10);
-          AddCommand(list, SE, FIRST, CHANGEDIFF, -10);
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, NW, FIRST, CHANGEDIFF, 15); // NW leg right
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Up
+          AddCommand(list, NE, FIRST, CHANGEDIFF, -15); // NE leg left
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Down
+
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, SE, FIRST, CHANGEDIFF, 15); // NW leg right
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Up
+          AddCommand(list, SW, FIRST, CHANGEDIFF, -15); // SW leg left
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Down
+
+          AddCommand(list, SE, END, CHANGEDIFF, -10); // SE leg forward
+          AddCommand(list, SW, END, CHANGEDIFF, -10); // SW leg forward 
+          AddCommand(list, NW, END, CHANGEDIFF, -10); // NW leg forward (reverse!)
+          AddCommand(list, NE, END, CHANGEDIFF, +10); // NE leg forward 
+          
+          AddCommand(list, SE, END, CHANGEDIFF, 10); // SE leg back to origin 
+          AddCommand(list, SW, END, CHANGEDIFF, 10); // SW leg back to origin 
+          AddCommand(list, NW, END, CHANGEDIFF, 10); // NW leg back to origin  (reverse!)
+          AddCommand(list, NE, END, CHANGEDIFF, -10); // NE leg back to origin 
+
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, NW, FIRST, CHANGEDIFF, -15); // NW leg back to origin
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Up
+          AddCommand(list, NE, FIRST, CHANGEDIFF, 15); // NE leg back to origin
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Down
+
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, SE, FIRST, CHANGEDIFF, -15); // NW leg back to origin
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Up
+          AddCommand(list, SW, FIRST, CHANGEDIFF, 15); // SW leg back to origin
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Down
           break;
 
         case BACKWARD:
           Serial.println("BACKWARD.");
-          // Todo : add backward command in command list
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, NW, FIRST, CHANGEDIFF, 15); // NW leg right
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Up
+          AddCommand(list, NE, FIRST, CHANGEDIFF, -15); // NE leg left
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Down
 
-          // Test code
-          AddCommand(list, SE, MID, CHANGEDIFF, 10);
-          AddCommand(list, SE, MID, CHANGEDIFF, -10);
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, SE, FIRST, CHANGEDIFF, 15); // NW leg right
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Up
+          AddCommand(list, SW, FIRST, CHANGEDIFF, -15); // SW leg left
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Down
+
+          AddCommand(list, SE, END, CHANGEDIFF, +10); // SE leg backward
+          AddCommand(list, SW, END, CHANGEDIFF, +10); // SW leg backward 
+          AddCommand(list, NW, END, CHANGEDIFF, +10); // NW leg backward (reverse!)
+          AddCommand(list, NE, END, CHANGEDIFF, -10); // NE leg backward 
+          
+          AddCommand(list, SE, END, CHANGEDIFF, -10); // SE leg back to origin 
+          AddCommand(list, SW, END, CHANGEDIFF, -10); // SW leg back to origin 
+          AddCommand(list, NW, END, CHANGEDIFF, -10); // NW leg back to origin  (reverse!)
+          AddCommand(list, NE, END, CHANGEDIFF, +10); // NE leg back to origin 
+
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, NW, FIRST, CHANGEDIFF, -15); // NW leg back to origin
+          AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Up
+          AddCommand(list, NE, FIRST, CHANGEDIFF, 15); // NE leg back to origin
+          AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Down
+
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Up
+          AddCommand(list, SE, FIRST, CHANGEDIFF, -15); // NW leg back to origin
+          AddCommand(list, SE, MID, CHANGEDIFF, -10); // NW leg Down
+          
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Up
+          AddCommand(list, SW, FIRST, CHANGEDIFF, 15); // SW leg back to origin
+          AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Down
           break;
 
         case R_ROT:
-          Serial.println("RIGHT ROTATION.");
-          // Todo : add right rotation command in command list
-
-          // Test code
-          AddCommand(list, SE, END, CHANGEDIFF, 10);
-          AddCommand(list, SE, END, CHANGEDIFF, -10);
-          break;
-
         case L_ROT:
-          Serial.println("LEFT ROTATION.");
-          // Todo : add left rotation command in command list
+          // Todo : add right rotation command in command list
+          int reverse = 1, iter = 3;
+          
+          if(command == R_ROT) {
+            Serial.println("RIGHT ROTATION.");
+            reverse = 1;
+          }
+          else {
+            Serial.println("LEFT ROTATION.");
+            reverse = -1;
+          }
+     
+          for(int i = 0 ; i < iter; i++) {
+            AddCommand(list, NW, MID, CHANGEDIFF, -10); // NW leg Up
+            AddCommand(list, NW, FIRST, CHANGEDIFF, reverse*(int)(90/iter)); // NW leg Rotate (1/3)
+            AddCommand(list, NW, MOD, CHANGEDIFF, 10); // NW leg Down
 
-          // Test code
-          AddCommand(list, SE, FIRST, CHANGEINTO, 90);
-          AddCommand(list, SE, MID, CHANGEINTO, 90);
-          AddCommand(list, SE, END, CHANGEINTO, 90);
+            AddCommand(list, NW, FIRST, CHANGEDIFF, (-1)*reverse*(int)(90/iter)); // NW leg back origin
+  
+            AddCommand(list, SE, MID, CHANGEDIFF, -10); // SE leg Up
+            AddCommand(list, SE, FIRST, CHANGEDIFF, reverse*(int)(90/iter)); // SE leg Rotate (1/3)
+            AddCommand(list, SE, MOD, CHANGEDIFF, 10); // SE leg Down
+
+            AddCommand(list, SE, FIRST, CHANGEDIFF, (-1)*reverse*(int)(90/iter)); // SE leg back origin
+  
+            AddCommand(list, NE, MID, CHANGEDIFF, -10); // NE leg Up
+            AddCommand(list, NE, FIRST, CHANGEDIFF, reverse*(int)(90/iter)); // NE leg Rotate (1/3)
+            AddCommand(list, NE, MOD, CHANGEDIFF, 10); // NE leg Down
+
+            AddCommand(list, NE, FIRST, CHANGEDIFF, (-1)*reverse*(int)(90/iter)); // NE leg back origin
+            
+            AddCommand(list, SW, MID, CHANGEDIFF, -10); // SW leg Up
+            AddCommand(list, SW, FIRST, CHANGEDIFF, reverse*(int)(90/iter)); // SW leg Rotate (1/3)
+            AddCommand(list, SW, MOD, CHANGEDIFF, 10); // SW leg Down
+
+            AddCommand(list, SW, FIRST, CHANGEDIFF, (-1)*reverse*(int)(90/iter)); // SW leg back origin
+          }
           break;
 
         case ROBOT_END:
@@ -279,7 +376,7 @@ void loop() {
               AddCommand(list, NW, MID, CHANGEINTO, STEADY_MID);
               break;
             case getPin(NE, MID):
-              AddCommand(list, NE, MID, CHANGEINTO, STEADY_MID); // adjust
+              AddCommand(list, NE, MID, CHANGEINTO, STEADY_MID);
               break;
             case getPin(SE, MID):
               AddCommand(list, SE, MID, CHANGEINTO, STEADY_MID);
@@ -289,7 +386,7 @@ void loop() {
               break;
 
             case getPin(NW, FIRST):
-              AddCommand(list, NW, FIRST, CHANGEINTO, STEADY_FIR); // adjust
+              AddCommand(list, NW, FIRST, CHANGEINTO, STEADY_FIR);
               break;
             case getPin(NE, FIRST):
               AddCommand(list, NE, FIRST, CHANGEINTO, STEADY_FIR);
@@ -298,7 +395,7 @@ void loop() {
               AddCommand(list, SE, FIRST, CHANGEINTO, STEADY_FIR);
               break;
             case getPin(SW, FIRST):
-              AddCommand(list, SW, FIRST, CHANGEINTO, STEADY_FIR); // adjust
+              AddCommand(list, SW, FIRST, CHANGEINTO, STEADY_FIR);
               break;
           }
         }while(arrPin[index++] != -1);

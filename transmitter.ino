@@ -19,20 +19,24 @@
 #define START 1
 #define STOP 2
 
-const int Max_X = 1022;
-const int Max_Y = 1022;
-const int Mergin = 200;
+// Constant var
+const int Max_X = 690;
+const int Max_Y = 690;
+const int Mergin = 30;
 const double pi = 3.141592;
 
-// output var
+// Output var
 int pos_X = 0;
 int pos_Y = 0;
 bool sw_toggle = false;
-// input var
+
+// Input var
 bool isStart = false;
 
+// Serial
 SoftwareSerial bluetooth(BT_RXD, BT_TXD);
 
+// return control using pos X, Y
 int Joy_control(int x, int y) {
   int result = STEADY;
   int pos_X = x - Max_X/2;
@@ -69,6 +73,7 @@ void setup(){
 }
  
 void loop(){
+  bool isTest = true;
   // receive start/stop signal
   if(bluetooth.available()) {
     int command = bluetooth.parseInt();
@@ -89,9 +94,9 @@ void loop(){
   }
 
   // transmitt joystick control
-  if(isStart) {
-    pos_X = analogRead(JOY_X);
-    pos_Y = analogRead(JOY_Y);
+  if(isStart|| isTest) {
+    pos_X = analogRead(JOY_Y);
+    pos_Y = analogRead(JOY_X);
     
     if(!digitalRead(JOY_SW)) {
       bluetooth.println(TOGGLE);
@@ -107,5 +112,5 @@ void loop(){
       Serial.println(Joy_control(pos_X, pos_Y));
     }
   }
-  delay(200); // delay 200ms
+  delay(100); // delay 200ms
 }
